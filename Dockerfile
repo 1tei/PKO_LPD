@@ -1,53 +1,29 @@
-# syntax=docker/dockerfile:1
+# Use the official Python image as the base
+FROM python:3.10
 
-# Stage 1: Dependency Resolution
-FROM python:3.10 AS dependencies
-LABEL stage="dependencies"
-WORKDIR /app
-
-# Install necessary dependencies for Python and Java
+# Install dependencies for Java (including Java 17)
 RUN apt-get update && apt-get install -y \
-    wget \
-    gnupg2 \
     openjdk-17-jdk \
+    build-essential \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies (including uvicorn)
-COPY setup.py .
-RUN pip install --no-cache-dir .
+# Set Java environment variables
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+ENV PATH="$JAVA_HOME/bin:$PATH"
 
-################################################################################
-
-# Stage 2: Build Application
-FROM dependencies AS builder
-LABEL stage="build"
+# Set working directory
 WORKDIR /app
 
-# Copy source code and prepare the application
+# Copy the application code into the container
 COPY . .
 
-################################################################################
+# Install pip and dependencies from pyproject.toml
+RUN pip install --no-cache-dir --upgrade pip
+RUN pip install --no-cache-dir .
 
-# Stage 3: Runtime
-FROM python:3.10 AS runtime
-LABEL stage="runtime"
-WORKDIR /app
-
-# Copy runtime artifacts from the builder stage
-COPY --from=builder /app /app
-
-# Add Java runtime (OpenJDK 17)
-RUN find /usr -name "java-17-openjdk*" -exec cp -r {} /usr/lib/jvm/ \;
-
-# Set JAVA_HOME and PATH
-ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk
-ENV PATH="${JAVA_HOME}/bin:${PATH}"
-
-# Install Uvicorn explicitly
-RUN pip install uvicorn
-
-# Expose necessary ports
+# Expose the port for the FastAPI app
 EXPOSE 8080
 
-# Command to run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
+# Run the FastAPI app with uvicorn
+CMD ["uvicorn", "vehicle_routing.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
